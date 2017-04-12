@@ -32,42 +32,23 @@
 #include "igzip_lib.h"
 
 #define BUF_SIZE 8192
-#ifndef LEVEL
-# define LEVEL 0
-#else
-# define LEVEL 1
-#endif
+
 
 struct isal_zstream stream;
+struct inflate_state state;
 
-int main(int argc, char *argv[])
-{
+int compress(FILE *in, FILE*out, int level, int gzip_flag) {
 	uint8_t inbuf[BUF_SIZE], outbuf[BUF_SIZE];
-	FILE *in, *out;
-
-	if (argc != 3) {
-		fprintf(stderr, "Usage: igzip_example infile outfile\n");
-		exit(0);
-	}
-	in = fopen(argv[1], "rb");
-	if (!in) {
-		fprintf(stderr, "Can't open %s for reading\n", argv[1]);
-		exit(0);
-	}
-	out = fopen(argv[2], "wb");
-	if (!out) {
-		fprintf(stderr, "Can't open %s for writing\n", argv[2]);
-		exit(0);
-	}
-
-	printf("igzip_example\nWindow Size: %d K\n", IGZIP_HIST_SIZE / 1024);
 	fflush(0);
-
+	printf("Using igzip compression\n");
 	isal_deflate_init(&stream);
 	stream.end_of_stream = 0;
 	stream.flush = NO_FLUSH;
+	// Set gzip header
+	// stream.gzip_flag = gzip_flag;
+	stream.level = level;
 
-	if (LEVEL == 1) {
+	if (level == 1) {
 		stream.level = 1;
 		stream.level_buf = malloc(ISAL_DEF_LVL1_DEFAULT);
 		stream.level_buf_size = ISAL_DEF_LVL1_DEFAULT;
@@ -95,7 +76,62 @@ int main(int argc, char *argv[])
 
 	fclose(out);
 	fclose(in);
-
-	printf("End of igzip_example\n\n");
 	return 0;
+}
+
+int decompress(FILE *in, FILE*out, int level, int gzip_flag) {
+	uint8_t inbuf[BUF_SIZE], outbuf[BUF_SIZE];
+	int ret = 0;
+	printf("Using igzip decompression\n");
+	isal_inflate_init(&state);
+	do {
+		state.avail_in = (uint32_t) fread(inbuf, 1, BUF_SIZE, in);
+		if (state.avail_in == 0)
+            break;
+		state.next_in = inbuf;
+		do {
+			state.avail_out = BUF_SIZE;
+			state.next_out = outbuf;
+			ret = isal_inflate(&state);
+			if (ret) {
+				printf("Error in decompression with error %d\n", ret);
+				break;
+			}
+			fwrite(outbuf, 1, BUF_SIZE - state.avail_out, out);
+		} while (state.avail_out == 0);
+	} while (ret != ISAL_END_INPUT);
+	fclose(out);
+	fclose(in);
+	return ret;
+}
+
+
+int main(int argc, char *argv[])
+{
+	FILE *in, *out;
+	int level = 0;
+	int flag = 1;
+	if (argc < 3) {
+		fprintf(stderr, "Usage: igzip_example infile outfile\n");
+		exit(0);
+	}
+	in = fopen(argv[1], "rb");
+	if (!in) {
+		fprintf(stderr, "Can't open %s for reading\n", argv[1]);
+		exit(0);
+	}
+	out = fopen(argv[2], "wb");
+	if (!out) {
+		fprintf(stderr, "Can't open %s for writing\n", argv[2]);
+		exit(0);
+	}
+	if (argc > 3) {
+		flag = 0;
+	}
+	printf("Current Flag %d\n", flag);
+	printf("igzip_example\nWindow Size: %d K\n", IGZIP_HIST_SIZE / 1024);
+	if (flag) 
+		compress(in, out, level, IGZIP_GZIP);
+	else
+		decompress(in, out, level, IGZIP_GZIP);
 }
