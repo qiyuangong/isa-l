@@ -45,7 +45,7 @@ int compress(FILE *in, FILE*out, int level, int gzip_flag) {
 	stream.end_of_stream = 0;
 	stream.flush = NO_FLUSH;
 	// Set gzip header
-	// stream.gzip_flag = gzip_flag;
+	stream.gzip_flag = gzip_flag;
 	stream.level = level;
 
 	if (level == 1) {
@@ -82,13 +82,19 @@ int compress(FILE *in, FILE*out, int level, int gzip_flag) {
 int decompress(FILE *in, FILE*out, int level, int gzip_flag) {
 	uint8_t inbuf[BUF_SIZE], outbuf[BUF_SIZE];
 	int ret = 0;
+	int count = 0;
 	printf("Using igzip decompression\n");
 	isal_inflate_init(&state);
 	do {
 		state.avail_in = (uint32_t) fread(inbuf, 1, BUF_SIZE, in);
 		if (state.avail_in == 0)
             break;
-		state.next_in = inbuf;
+		/* TODO gzip header */
+		if (gzip_flag == IGZIP_GZIP && count == 0) {
+			state.next_in = inbuf + 2;
+			state.avail_in -= 2;
+		}
+		count += 1;
 		do {
 			state.avail_out = BUF_SIZE;
 			state.next_out = outbuf;
