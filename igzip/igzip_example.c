@@ -32,14 +32,12 @@
 #include "igzip_lib.h"
 
 #define BUF_SIZE 8192
+const uint32_t gzip_hdr_bytes = 10;
 
-
-struct isal_zstream stream;
-struct inflate_state state;
-
-int compress(FILE *in, FILE*out, int level, int gzip_flag) {
+int compress(FILE *in, FILE *out, int level, int gzip_flag) {
+	struct isal_zstream stream;
 	uint8_t inbuf[BUF_SIZE], outbuf[BUF_SIZE];
-	fflush(0);
+	// fflush(0);
 	printf("Using igzip compression\n");
 	isal_deflate_init(&stream);
 	stream.end_of_stream = 0;
@@ -60,6 +58,7 @@ int compress(FILE *in, FILE*out, int level, int gzip_flag) {
 
 	do {
 		stream.avail_in = (uint32_t) fread(inbuf, 1, BUF_SIZE, in);
+		/* TODO EOF error handle*/
 		stream.end_of_stream = feof(in) ? 1 : 0;
 		stream.next_in = inbuf;
 		do {
@@ -79,21 +78,23 @@ int compress(FILE *in, FILE*out, int level, int gzip_flag) {
 	return 0;
 }
 
-int decompress(FILE *in, FILE*out, int level, int gzip_flag) {
+int decompress(FILE *in, FILE *out, int level, int gzip_flag) {
+	struct inflate_state state;
 	uint8_t inbuf[BUF_SIZE], outbuf[BUF_SIZE];
+	// fflush(0);
 	int ret = 0;
 	int count = 0;
 	printf("Using igzip decompression\n");
 	isal_inflate_init(&state);
 	do {
 		state.avail_in = (uint32_t) fread(inbuf, 1, BUF_SIZE, in);
+		/* skip gzip header */
+		if (gzip_flag == IGZIP_GZIP && count == 0) {
+			state.next_in = inbuf + gzip_hdr_bytes;
+			state.avail_in -= gzip_hdr_bytes;
+		}
 		if (state.avail_in == 0)
             break;
-		/* TODO gzip header */
-		if (gzip_flag == IGZIP_GZIP && count == 0) {
-			state.next_in = inbuf + 2;
-			state.avail_in -= 2;
-		}
 		count += 1;
 		do {
 			state.avail_out = BUF_SIZE;
@@ -115,7 +116,7 @@ int decompress(FILE *in, FILE*out, int level, int gzip_flag) {
 int main(int argc, char *argv[])
 {
 	FILE *in, *out;
-	int level = 0;
+	int level = 1;
 	int flag = 1;
 	if (argc < 3) {
 		fprintf(stderr, "Usage: igzip_example infile outfile\n");
