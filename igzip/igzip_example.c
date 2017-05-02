@@ -88,14 +88,17 @@ int decompress(FILE *in, FILE *out, int level, int gzip_flag) {
 	isal_inflate_init(&state);
 	do {
 		state.avail_in = (uint32_t) fread(inbuf, 1, BUF_SIZE, in);
+		// printf("count %d\n", count);
 		/* skip gzip header */
 		if (gzip_flag == IGZIP_GZIP && count == 0) {
 			state.next_in = inbuf + gzip_hdr_bytes;
 			state.avail_in -= gzip_hdr_bytes;
 		}
+		else
+			state.next_in = inbuf;
+		// printf("state.avail_in %d\n", state.avail_in);
 		if (state.avail_in == 0)
             break;
-		count += 1;
 		do {
 			state.avail_out = BUF_SIZE;
 			state.next_out = outbuf;
@@ -106,12 +109,23 @@ int decompress(FILE *in, FILE *out, int level, int gzip_flag) {
 			}
 			fwrite(outbuf, 1, BUF_SIZE - state.avail_out, out);
 		} while (state.avail_out == 0);
+		count += 1;
 	} while (ret != ISAL_END_INPUT);
 	fclose(out);
 	fclose(in);
 	return ret;
 }
 
+
+int compatible(FILE *in) {
+	/* Check if isa-l is compatible with zlib */
+
+	/* Compress Check: Isa-l compress then zlib decompress */
+	
+
+	/* Decompress Check: zlib compress then isa-l decompress */
+
+}
 
 int main(int argc, char *argv[])
 {
